@@ -7,6 +7,7 @@ use Joomla\CMS\Factory;
 use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Plugin\PluginHelper;
+use Joomla\CMS\Uri\Uri;
 use Joomla\Database\DatabaseDriver;
 use Joomla\Registry\Registry;
 use YOOtheme\Str;
@@ -26,7 +27,9 @@ class FlexicontentFieldsType
                 $name = "field_{$field->id}";
             }
 
-            $isImage = ($field->field_type ?? '') === 'image';
+            $fieldType = strtolower((string) ($field->field_type ?? ''));
+            $isImage = static::isImageFieldType($fieldType);
+            $isMedia = static::isMediaFieldType($fieldType);
             $formatOptions = [
                 trans('Display') => 'display',
                 trans('Raw') => 'raw',
@@ -76,6 +79,23 @@ class FlexicontentFieldsType
                     ],
                 ],
             ];
+
+            if ($isMedia) {
+                $fields["{$name}_url"] = [
+                    'type' => 'String',
+                    'metadata' => [
+                        'label' => Text::_($field->label ?: $field->name) . ' ' . trans('URL'),
+                        'group' => trans('FLEXIContent'),
+                        'filters' => ['limit', 'preserve'],
+                    ],
+                    'extensions' => [
+                        'call' => [
+                            'func' => __CLASS__ . '::resolveMediaUrl',
+                            'args' => ['field_id' => (int) $field->id],
+                        ],
+                    ],
+                ];
+            }
 
             $fields["{$name}_values"] = [
                 'type' => ['listOf' => 'FlexicontentValue'],
@@ -168,6 +188,36 @@ class FlexicontentFieldsType
             fn($value) => ['value' => $value],
             static::flattenValues(static::getFieldValues((int) $item->id, (int) $args['field_id'])),
         );
+    }
+
+    public static function resolveMediaUrl($item, array $args, $context, $info): ?string
+    {
+        if (empty($item->id) || empty($args['field_id'])) {
+            return null;
+        }
+
+        $field = static::getFlexicontentField((int) $args['field_id']);
+
+        if (!$field) {
+            return null;
+        }
+
+        $values = static::getFieldValues((int) $item->id, (int) $field->id);
+        $url = static::extractMediaUrl($values);
+
+        if ($url) {
+            return $url;
+        }
+
+        $url = static::resolveFlexicontentMediaFile((int) $item->id, $field, $values);
+
+        if ($url) {
+            return $url;
+        }
+
+        $display = static::renderField($item, $field, $values, 'display');
+
+        return static::extractMediaUrl([$display]);
     }
 
     public static function resolveImage($item, array $args, $context, $info): ?string
@@ -794,6 +844,170 @@ class FlexicontentFieldsType
         }
 
         return $value;
+    }
+
+    protected static function isImageFieldType(string $fieldType): bool
+    {
+        return $fieldType === 'image';
+    }
+
+    protected static function isMediaFieldType(string $fieldType): bool
+    {
+        return in_array($fieldType, ['image', 'file', 'mediafile', 'sharedmedia'], true);
+    }
+
+    protected static function extractMediaUrl(array $values): ?string
+    {
+        foreach ($values as $value) {
+            $url = static::findMediaUrl(static::decodeValue($value));
+
+            if ($url) {
+                return static::normalizeMediaUrl($url);
+            }
+        }
+
+        return null;
+    }
+
+    protected static function findMediaUrl($value): ?string
+    {
+        if (is_array($value)) {
+            foreach (['url', 'src', 'file', 'path', 'filepath', 'media', 'image', 'original', 'filename'] as $key) {
+                if (!empty($value[$key])) {
+                    $url = static::findMediaUrl($value[$key]);
+
+                    if ($url) {
+                        return $url;
+                    }
+                }
+            }
+
+            foreach ($value as $item) {
+                $url = static::findMediaUrl($item);
+
+                if ($url) {
+                    return $url;
+                }
+            }
+
+            return null;
+        }
+
+        if (!is_scalar($value)) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        if (preg_match('/(?:src|href)=["\']([^"\']+)["\']/i', $value, $matches)) {
+            return $matches[1];
+        }
+
+        if (preg_match('~(?:^|[\s"\'])(/?(?:images|media|files|components|plugins|templates)/[^\s"\'<>]+)~i', $value, $matches)) {
+            return $matches[1];
+        }
+
+        if (preg_match('~^(?:[a-z][a-z0-9+.-]*:|//|/)~i', $value)) {
+            return $value;
+        }
+
+        return null;
+    }
+
+    protected static function normalizeMediaUrl(string $url): string
+    {
+        $url = trim(html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        $url = trim($url, "\"' ");
+        $url = str_replace('\\', '/', $url);
+
+        if ($url === '' || preg_match('~^(?:[a-z][a-z0-9+.-]*:|//)~i', $url)) {
+            return $url;
+        }
+
+        $root = str_replace('\\', '/', JPATH_ROOT);
+
+        if (str_starts_with($url, $root . '/')) {
+            $url = substr($url, strlen($root) + 1);
+        }
+
+        $url = ltrim(preg_replace('~^\./~', '', $url), '/');
+
+        return (Uri::root(true) ?: '') . '/' . $url;
+    }
+
+    protected static function resolveFlexicontentMediaFile(int $itemId, object $field, array $values): ?string
+    {
+        $fieldType = strtolower((string) ($field->field_type ?? ''));
+
+        if ($fieldType === 'image') {
+            return static::resolveFlexicontentImageFile($itemId, $field, $values);
+        }
+
+        if (!in_array($fieldType, ['file', 'mediafile'], true)) {
+            return null;
+        }
+
+        $fileId = (int) (static::flattenValues($values)[0] ?? 0);
+
+        if (!$fileId || !static::tableExists('#__flexicontent_files')) {
+            return null;
+        }
+
+        /** @var DatabaseDriver $db */
+        $db = app(DatabaseDriver::class);
+        $query = $db->getQuery(true)
+            ->select(['filename', 'url'])
+            ->from($db->quoteName('#__flexicontent_files'))
+            ->where($db->quoteName('id') . ' = ' . $fileId)
+            ->where($db->quoteName('published') . ' = 1');
+
+        try {
+            $file = $db->setQuery($query)->loadObject();
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        if (!$file || empty($file->filename)) {
+            return null;
+        }
+
+        if ((int) $file->url) {
+            return static::normalizeMediaUrl((string) $file->filename);
+        }
+
+        $folder = $fieldType === 'mediafile' ? 'medias' : 'uploads';
+
+        return static::normalizeMediaUrl("components/com_flexicontent/{$folder}/{$file->filename}");
+    }
+
+    protected static function resolveFlexicontentImageFile(int $itemId, object $field, array $values): ?string
+    {
+        foreach ($values as $value) {
+            $decoded = static::decodeValue($value);
+
+            if (!is_array($decoded)) {
+                continue;
+            }
+
+            $filename = trim((string) ($decoded['existingname'] ?? $decoded['originalname'] ?? ''));
+
+            if ($filename === '') {
+                continue;
+            }
+
+            $params = new Registry($field->attribs ?? '');
+            $dir = trim((string) $params->get('dir', 'images/stories/flexicontent'), '/');
+
+            return static::normalizeMediaUrl(
+                "{$dir}/item_{$itemId}_field_{$field->id}/original/{$filename}",
+            );
+        }
+
+        return null;
     }
 
     protected static function loadFlexicontentRuntime(): bool

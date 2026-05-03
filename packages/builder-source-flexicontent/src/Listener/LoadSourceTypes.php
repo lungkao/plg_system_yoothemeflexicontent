@@ -10,7 +10,7 @@ class LoadSourceTypes
 {
     public static function handle($source): void
     {
-        $fields = [];
+        $fields = FlexicontentFieldsType::getFlexicontentFields();
 
         $source->objectType('FlexicontentValue', FlexicontentValueType::config());
 

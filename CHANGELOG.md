@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.4 - 2026-05-03
+
+- Fixed FLEXIContent custom fields not appearing in YOOtheme Dynamic Content by loading published non-core FLEXIContent fields into the source schema.
+- Added URL mappings for FLEXIContent `image`, `file`, `mediafile` and `sharedmedia` fields.
+- Added direct FLEXIContent file resolution for uploaded images, files and media files so YOOtheme elements can receive usable URLs.
+
 ## 2.0.3 - 2026-05-03
 
 - Fixed unresolved `${builder.*}` placeholders in cached element configs.
