@@ -8,7 +8,7 @@
 
 1. เข้า Joomla Administrator
 2. ไปที่ `System > Install > Extensions`
-3. อัปโหลดไฟล์ `plg_system_yoothemeflexicontent-2.0.1.zip`
+3. อัปโหลดไฟล์ `plg_system_yoothemeflexicontent-2.0.2.zip`
 4. เมื่อติดตั้งเสร็จ ระบบจะเปิด plugin ให้อัตโนมัติ
 5. ถ้า YOOtheme Customizer เปิดค้างอยู่ ให้ปิดแล้วเปิดใหม่
 
@@ -74,4 +74,3 @@
 2. Clear Joomla cache
 3. ลบ schema cache ที่ `templates/yootheme/cache/schema-*.gql`
 4. ปิดและเปิด YOOtheme Customizer ใหม่
-

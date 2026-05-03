@@ -34,7 +34,7 @@ System > Install > Extensions > Upload Package File
 ไฟล์ build ปัจจุบันอยู่ที่:
 
 ```text
-installers/dist/plg_system_yoothemeflexicontent-2.0.1.zip
+installers/dist/plg_system_yoothemeflexicontent-2.0.2.zip
 ```
 
 หลังติดตั้ง ให้ปิดและเปิด YOOtheme Customizer ใหม่ เพื่อให้ schema และ builder config โหลดใหม่
@@ -53,4 +53,3 @@ installers/dist/plg_system_yoothemeflexicontent-2.0.1.zip
 ## ดูแลต่อ
 
 ดูรายละเอียด architecture, patch ที่ installer ทำกับ YOOtheme และ troubleshooting ได้ที่ [docs/DEVELOPER_NOTES.md](docs/DEVELOPER_NOTES.md)
-

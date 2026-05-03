@@ -51,7 +51,7 @@ public static function handle($config): void
 
 ```bash
 cd installers/plg_system_yoothemeflexicontent
-zip -qr ../dist/plg_system_yoothemeflexicontent-2.0.1.zip . -x '.git/*'
+zip -qr ../dist/plg_system_yoothemeflexicontent-2.0.2.zip . -x '.git/*'
 ```
 
 ## Test checklist
@@ -82,4 +82,3 @@ Expected:
 - category extension อ่านจาก `com_flexicontent.flexi_cat_extension`
 - ถ้าไม่มี config จะ fallback เป็น `com_content`
 - หลังอัปเดต YOOtheme ควร reinstall plugin เพื่อ sync patch อีกครั้ง
-

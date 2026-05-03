@@ -177,11 +177,24 @@ class BuilderConfig extends ConfigObject
             $elements = require $cache;
 
             if (is_array($elements)) {
-                return $elements;
+                return static::normalizeElements($elements);
             }
         }
 
         return static::scanElements();
+    }
+
+    protected static function normalizeElements(array $elements): array
+    {
+        foreach ($elements as $name => $element) {
+            if (!is_array($element)) {
+                continue;
+            }
+
+            $elements[$name] = static::normalizeElementAssets($element);
+        }
+
+        return $elements;
     }
 
     protected static function scanElements(): array
@@ -202,17 +215,76 @@ class BuilderConfig extends ConfigObject
                 $title = static::matchString($code, 'title') ?: ucwords(str_replace(['_', '-'], ' ', $name));
                 $group = static::matchString($code, 'group');
 
-                $elements[$name] = array_filter([
+                $elements[$name] = static::normalizeElementAssets(array_filter([
                     'name' => $name,
                     'title' => $title,
                     'group' => $group,
+                    'path' => dirname($file),
                     'element' => str_contains($code, "'element' => true"),
                     'container' => str_contains($code, "'container' => true"),
-                ], static fn($value) => $value !== null && $value !== false && $value !== '');
+                ], static fn($value) => $value !== null && $value !== false && $value !== ''));
             }
         }
 
         return $elements;
+    }
+
+    protected static function normalizeElementAssets(array $element): array
+    {
+        $path = $element['path'] ?? null;
+
+        if (!$path && isset($element['name'])) {
+            $path = static::findElementPath((string) $element['name']);
+        }
+
+        if (!$path) {
+            return $element;
+        }
+
+        foreach (['icon', 'iconSmall'] as $key) {
+            if (!isset($element[$key]) || !is_string($element[$key])) {
+                continue;
+            }
+
+            if (preg_match('/^\$\{url:(.+)}$/', $element[$key], $matches)) {
+                $element[$key] = static::toSiteUrl($path . '/' . ltrim($matches[1], '/'));
+            }
+        }
+
+        unset($element['path'], $element['file']);
+
+        return $element;
+    }
+
+    protected static function findElementPath(string $name): ?string
+    {
+        $packages = dirname(__DIR__, 3);
+        $paths = [
+            "{$packages}/builder/elements/{$name}",
+            "{$packages}/builder-joomla/elements/{$name}",
+            "{$packages}/builder-joomla-source/elements/{$name}",
+            "{$packages}/builder-newsletter/elements/{$name}",
+        ];
+
+        foreach ($paths as $path) {
+            if (is_file("{$path}/element.php")) {
+                return $path;
+            }
+        }
+
+        return null;
+    }
+
+    protected static function toSiteUrl(string $path): string
+    {
+        $root = str_replace('\\', '/', JPATH_SITE);
+        $path = str_replace('\\', '/', $path);
+
+        if (str_starts_with($path, $root)) {
+            return substr($path, strlen($root)) ?: '/';
+        }
+
+        return $path;
     }
 
     protected static function matchString(string $code, string $key): ?string
