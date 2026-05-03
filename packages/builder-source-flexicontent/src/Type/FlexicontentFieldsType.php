@@ -169,13 +169,23 @@ class FlexicontentFieldsType
             return null;
         }
 
-        $values = static::getFieldValues((int) $item->id, (int) $field->id);
+        $itemId = (int) $item->id;
+        $values = static::getFieldValues($itemId, (int) $field->id);
 
         if (($args['format'] ?? 'display') === 'raw') {
             return implode($args['separator'] ?? ', ', static::flattenValues($values));
         }
 
-        return static::renderField($item, $field, $values, $args['format'] ?? 'display');
+        $format = $args['format'] ?? 'display';
+        $fallback = static::resolveFieldFallback($itemId, $field, $values, $format);
+
+        if ($fallback !== null) {
+            return $fallback;
+        }
+
+        $display = static::renderField($item, $field, $values, $format);
+
+        return $display !== '' ? $display : implode($args['separator'] ?? ', ', static::flattenValues($values));
     }
 
     public static function resolveValues($item, array $args, $context, $info): array
@@ -203,7 +213,7 @@ class FlexicontentFieldsType
         }
 
         $values = static::getFieldValues((int) $item->id, (int) $field->id);
-        $url = static::extractMediaUrl($values);
+        $url = static::resolveFieldFallback((int) $item->id, $field, $values, 'url');
 
         if ($url) {
             return $url;
@@ -236,12 +246,14 @@ class FlexicontentFieldsType
             ? $args['size']
             : 'large';
 
-        return static::renderField(
+        $url = static::renderField(
             $item,
             $field,
             static::getFieldValues((int) $item->id, (int) $field->id),
             "display_{$size}_src",
         );
+
+        return $url !== '' ? $url : static::resolveFlexicontentImageFile((int) $item->id, $field, static::getFieldValues((int) $item->id, (int) $field->id), $size);
     }
 
     public static function resolveCurrentItem($item, array $args, $context, $info): ?object
@@ -856,6 +868,65 @@ class FlexicontentFieldsType
         return in_array($fieldType, ['image', 'file', 'mediafile', 'sharedmedia'], true);
     }
 
+    protected static function resolveFieldFallback(int $itemId, object $field, array $values, string $format): ?string
+    {
+        $fieldType = strtolower((string) ($field->field_type ?? ''));
+
+        if ($fieldType === 'image') {
+            $size = 'large';
+
+            if (preg_match('/display_(small|medium|large|original)_src/', $format, $matches)) {
+                $size = $matches[1];
+            }
+
+            return static::resolveFlexicontentImageFile($itemId, $field, $values, $size);
+        }
+
+        if (in_array($fieldType, ['file', 'mediafile'], true)) {
+            $urls = static::resolveFlexicontentMediaFiles($itemId, $field, $values);
+
+            return $urls ? implode(', ', $urls) : null;
+        }
+
+        if ($fieldType === 'sharedmedia') {
+            foreach ($values as $value) {
+                $decoded = static::decodeValue($value);
+
+                if (is_array($decoded)) {
+                    return (string) ($decoded['embed_url'] ?? $decoded['url'] ?? $decoded['thumb'] ?? null);
+                }
+            }
+        }
+
+        if ($fieldType === 'weblink') {
+            foreach ($values as $value) {
+                $decoded = static::decodeValue($value);
+
+                if (is_array($decoded)) {
+                    return (string) ($decoded['link'] ?? $decoded['url'] ?? $decoded['linktext'] ?? $decoded['title'] ?? null);
+                }
+            }
+        }
+
+        if ($fieldType === 'relation') {
+            $titles = static::resolveRelationTitles($values);
+
+            return $titles ? implode(', ', $titles) : null;
+        }
+
+        if ($fieldType === 'addressint') {
+            foreach ($values as $value) {
+                $decoded = static::decodeValue($value);
+
+                if (is_array($decoded)) {
+                    return (string) ($decoded['addr_display'] ?? $decoded['address'] ?? null);
+                }
+            }
+        }
+
+        return null;
+    }
+
     protected static function extractMediaUrl(array $values): ?string
     {
         foreach ($values as $value) {
@@ -934,58 +1005,84 @@ class FlexicontentFieldsType
             $url = substr($url, strlen($root) + 1);
         }
 
-        $url = ltrim(preg_replace('~^\./~', '', $url), '/');
+        $url = static::encodeUrlPath(ltrim(preg_replace('~^\./~', '', $url), '/'));
 
-        return (Uri::root(true) ?: '') . '/' . $url;
+        return static::rootPath() . '/' . $url;
     }
 
     protected static function resolveFlexicontentMediaFile(int $itemId, object $field, array $values): ?string
     {
+        return static::resolveFlexicontentMediaFiles($itemId, $field, $values)[0] ?? null;
+    }
+
+    protected static function resolveFlexicontentMediaFiles(int $itemId, object $field, array $values): array
+    {
         $fieldType = strtolower((string) ($field->field_type ?? ''));
 
         if ($fieldType === 'image') {
-            return static::resolveFlexicontentImageFile($itemId, $field, $values);
+            $url = static::resolveFlexicontentImageFile($itemId, $field, $values);
+
+            return $url ? [$url] : [];
         }
 
         if (!in_array($fieldType, ['file', 'mediafile'], true)) {
-            return null;
+            return [];
         }
 
-        $fileId = (int) (static::flattenValues($values)[0] ?? 0);
+        $fileIds = array_values(array_filter(array_map('intval', static::flattenValues($values))));
 
-        if (!$fileId || !static::tableExists('#__flexicontent_files')) {
-            return null;
+        if (!$fileIds || !static::tableExists('#__flexicontent_files')) {
+            return [];
         }
 
         /** @var DatabaseDriver $db */
         $db = app(DatabaseDriver::class);
         $query = $db->getQuery(true)
-            ->select(['filename', 'url'])
+            ->select(['id', 'filename', 'url'])
             ->from($db->quoteName('#__flexicontent_files'))
-            ->where($db->quoteName('id') . ' = ' . $fileId)
+            ->where($db->quoteName('id') . ' IN (' . implode(',', $fileIds) . ')')
             ->where($db->quoteName('published') . ' = 1');
 
         try {
-            $file = $db->setQuery($query)->loadObject();
+            $files = $db->setQuery($query)->loadObjectList('id') ?: [];
         } catch (\Throwable $e) {
-            return null;
+            return [];
         }
 
-        if (!$file || empty($file->filename)) {
-            return null;
+        $urls = [];
+
+        foreach ($fileIds as $fileId) {
+            $file = $files[$fileId] ?? null;
+
+            if (!$file || empty($file->filename)) {
+                continue;
+            }
+
+            if ((int) $file->url) {
+                $urls[] = static::normalizeMediaUrl((string) $file->filename);
+                continue;
+            }
+
+            if ($fieldType === 'mediafile') {
+                $urls[] = static::normalizeMediaUrl("components/com_flexicontent/medias/{$file->filename}");
+            } else {
+                $urls[] = static::rootPath() . '/index.php?option=com_flexicontent&task=download&id=' .
+                    (int) $file->id . '&cid=' . $itemId . '&fid=' . (int) $field->id . '&method=view';
+            }
         }
 
-        if ((int) $file->url) {
-            return static::normalizeMediaUrl((string) $file->filename);
-        }
-
-        $folder = $fieldType === 'mediafile' ? 'medias' : 'uploads';
-
-        return static::normalizeMediaUrl("components/com_flexicontent/{$folder}/{$file->filename}");
+        return $urls;
     }
 
-    protected static function resolveFlexicontentImageFile(int $itemId, object $field, array $values): ?string
+    protected static function resolveFlexicontentImageFile(int $itemId, object $field, array $values, string $size = 'large'): ?string
     {
+        $prefix = match ($size) {
+            'small' => 's_',
+            'medium' => 'm_',
+            'original' => 'o_',
+            default => 'l_',
+        };
+
         foreach ($values as $value) {
             $decoded = static::decodeValue($value);
 
@@ -993,7 +1090,7 @@ class FlexicontentFieldsType
                 continue;
             }
 
-            $filename = trim((string) ($decoded['existingname'] ?? $decoded['originalname'] ?? ''));
+            $filename = trim((string) ($decoded['existingname'] ?: $decoded['originalname'] ?? ''));
 
             if ($filename === '') {
                 continue;
@@ -1001,13 +1098,70 @@ class FlexicontentFieldsType
 
             $params = new Registry($field->attribs ?? '');
             $dir = trim((string) $params->get('dir', 'images/stories/flexicontent'), '/');
+            $protectedOriginal = (bool) $params->get('protect_original', 1);
+            $path = $size === 'original' && !$protectedOriginal
+                ? "{$dir}/item_{$itemId}_field_{$field->id}/original/{$filename}"
+                : "{$dir}/item_{$itemId}_field_{$field->id}/{$prefix}{$filename}";
 
-            return static::normalizeMediaUrl(
-                "{$dir}/item_{$itemId}_field_{$field->id}/original/{$filename}",
-            );
+            if (!is_file(JPATH_ROOT . '/' . $path)) {
+                $path = "{$dir}/item_{$itemId}_field_{$field->id}/l_{$filename}";
+            }
+
+            return static::normalizeMediaUrl($path);
         }
 
         return null;
+    }
+
+    protected static function resolveRelationTitles(array $values): array
+    {
+        $ids = [];
+
+        foreach (static::flattenValues($values) as $value) {
+            $id = (int) strtok($value, ':');
+
+            if ($id) {
+                $ids[] = $id;
+            }
+        }
+
+        $ids = array_values(array_unique($ids));
+
+        if (!$ids) {
+            return [];
+        }
+
+        /** @var DatabaseDriver $db */
+        $db = app(DatabaseDriver::class);
+        $query = $db->getQuery(true)
+            ->select(['id', 'title'])
+            ->from($db->quoteName('#__content'))
+            ->where($db->quoteName('id') . ' IN (' . implode(',', $ids) . ')');
+
+        try {
+            $titles = $db->setQuery($query)->loadAssocList('id', 'title') ?: [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            static fn($id) => $titles[$id] ?? null,
+            $ids,
+        )));
+    }
+
+    protected static function encodeUrlPath(string $path): string
+    {
+        return implode('/', array_map('rawurlencode', explode('/', $path)));
+    }
+
+    protected static function rootPath(): string
+    {
+        $root = rtrim((string) Uri::root(true), '/');
+        $root = preg_replace('~/(administrator|api)$~', '', $root) ?: '';
+        $root = preg_replace('~/index\.php$~', '', $root) ?: '';
+
+        return rtrim($root, '/');
     }
 
     protected static function loadFlexicontentRuntime(): bool

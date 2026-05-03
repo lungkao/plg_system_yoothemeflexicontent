@@ -8,7 +8,7 @@
 
 1. เข้า Joomla Administrator
 2. ไปที่ `System > Install > Extensions`
-3. อัปโหลดไฟล์ `plg_system_yoothemeflexicontent-2.0.4.zip`
+3. อัปโหลดไฟล์ `plg_system_yoothemeflexicontent-2.0.5.zip`
 4. เมื่อติดตั้งเสร็จ ระบบจะเปิด plugin ให้อัตโนมัติ
 5. ถ้า YOOtheme Customizer เปิดค้างอยู่ ให้ปิดแล้วเปิดใหม่
 
@@ -37,6 +37,8 @@
 
 Custom fields ของ FLEXIContent จะแสดงใต้ field ชื่อ `FLEXIContent Fields` ของ item source เช่น `รูปภาพ`, `รูปภาพ URL`, `Test File URL`, `Test MediaFile URL`
 
+สำหรับ field ซับซ้อน เช่น file, mediafile, sharedmedia, weblink, relation และ address ให้ใช้ field หลักเพื่อแสดงข้อความ/URL หรือใช้ field ที่ลงท้าย `URL` เมื่อ map เข้า Image, Video หรือ Button link
+
 ### Custom source
 
 ใช้เมื่อต้องการเลือกข้อมูลเอง ไม่อิงหน้า current page
@@ -63,8 +65,10 @@ Custom fields ของ FLEXIContent จะแสดงใต้ field ชื่
 1. field รูปภาพของ FLEXIContent มีค่า path จริง
 2. path อยู่ในโฟลเดอร์ที่ Joomla/YOOtheme อ่านได้ เช่น `images`
 3. เลือก dynamic field ที่เป็น `รูปภาพ URL` หรือ `รูปภาพ Image URL` ไม่ใช่ label หรือ raw object
-4. ใน Image element ให้ map ที่ช่อง `Image`
-5. ถ้าใช้ custom field ซับซ้อน ให้ทดสอบด้วย Title ก่อน เพื่อยืนยัน source ถูกต้อง
+4. ถ้าเป็น file ให้ map ไปที่ `Test File URL` หรือ field หลัก `Test File` ซึ่งจะคืน download URL
+5. ถ้าเป็น mediafile ให้ map ไปที่ `Test MediaFile URL` หรือ field หลัก `Test MediaFile` ซึ่งจะคืน URL ของไฟล์ media
+6. ใน Image element ให้ map ที่ช่อง `Image`
+7. ถ้าใช้ custom field ซับซ้อน ให้ทดสอบด้วย Title ก่อน เพื่อยืนยัน source ถูกต้อง
 
 ## 7. หลังอัปเดต YOOtheme
 

@@ -51,7 +51,7 @@ public static function handle($config): void
 
 ```bash
 cd installers/plg_system_yoothemeflexicontent
-zip -qr ../dist/plg_system_yoothemeflexicontent-2.0.4.zip . -x '.git/*'
+zip -qr ../dist/plg_system_yoothemeflexicontent-2.0.5.zip . -x '.git/*'
 ```
 
 ## Test checklist

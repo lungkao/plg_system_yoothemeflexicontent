@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.5 - 2026-05-03
+
+- Fixed FLEXIContent field values that were selectable in YOOtheme but rendered empty.
+- Added robust fallback output for complex FLEXIContent field types: image, file, mediafile, sharedmedia, weblink, relation and address.
+- Fixed image URLs to use public FLEXIContent thumbnails instead of protected `original` files.
+- Fixed file fields to use FLEXIContent download routes when uploads are protected by `.htaccess`.
+
 ## 2.0.4 - 2026-05-03
 
 - Fixed FLEXIContent custom fields not appearing in YOOtheme Dynamic Content by loading published non-core FLEXIContent fields into the source schema.

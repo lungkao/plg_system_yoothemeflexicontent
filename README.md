@@ -22,6 +22,7 @@ FLEXIContent custom fields:
 
 - Item fields are available under `FLEXIContent Fields` when the source is `FLEXIContent Item`, `Custom FLEXIContent Item`, or a FLEXIContent items list.
 - Image, file, mediafile and sharedmedia fields also expose a clean `URL` field for YOOtheme Image, Video and link mappings.
+- Complex fields such as relation, weblink and address have fallback text output when FLEXIContent's renderer does not return simple display text.
 
 Template Assignment:
 
@@ -39,7 +40,7 @@ System > Install > Extensions > Upload Package File
 ไฟล์ build ปัจจุบันอยู่ที่:
 
 ```text
-installers/dist/plg_system_yoothemeflexicontent-2.0.4.zip
+installers/dist/plg_system_yoothemeflexicontent-2.0.5.zip
 ```
 
 หลังติดตั้ง ให้ปิดและเปิด YOOtheme Customizer ใหม่ เพื่อให้ schema และ builder config โหลดใหม่
