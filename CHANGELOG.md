@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.3 - 2026-05-03
+
+- Fixed unresolved `${builder.*}` placeholders in cached element configs.
+- Resolved imported YOOtheme builder config so elements can be added from the Customizer library without JavaScript errors.
+- Fixed remaining `${url:*}` placeholders that could produce `icon.svg%7D` and `iconSmall.svg%7D` 404 requests.
+
 ## 2.0.2 - 2026-05-03
 
 - Fixed broken YOOtheme element icons in the Customizer library by normalizing cached element icon paths to real site URLs.

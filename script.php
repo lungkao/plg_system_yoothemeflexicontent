@@ -186,15 +186,46 @@ class BuilderConfig extends ConfigObject
 
     protected static function normalizeElements(array $elements): array
     {
+        $builder = static::loadBuilderConfig();
+
         foreach ($elements as $name => $element) {
             if (!is_array($element)) {
                 continue;
             }
 
-            $elements[$name] = static::normalizeElementAssets($element);
+            $elements[$name] = static::normalizeElementAssets($element, $builder);
         }
 
         return $elements;
+    }
+
+    protected static function loadBuilderConfig(): array
+    {
+        return static::loadConfigFile(dirname(__DIR__, 2) . '/config/builder.php');
+    }
+
+    protected static function loadConfigFile(string $file): array
+    {
+        if (!is_file($file)) {
+            return [];
+        }
+
+        $config = require $file;
+
+        if (!is_array($config)) {
+            return [];
+        }
+
+        foreach ((array) ($config['@import'] ?? []) as $import) {
+            $config = array_replace_recursive(
+                $config,
+                static::loadConfigFile(str_starts_with($import, '/') ? $import : dirname($file) . '/' . $import),
+            );
+        }
+
+        unset($config['@import']);
+
+        return $config;
     }
 
     protected static function scanElements(): array
@@ -222,14 +253,14 @@ class BuilderConfig extends ConfigObject
                     'path' => dirname($file),
                     'element' => str_contains($code, "'element' => true"),
                     'container' => str_contains($code, "'container' => true"),
-                ], static fn($value) => $value !== null && $value !== false && $value !== ''));
+                ], static fn($value) => $value !== null && $value !== false && $value !== ''), static::loadBuilderConfig());
             }
         }
 
         return $elements;
     }
 
-    protected static function normalizeElementAssets(array $element): array
+    protected static function normalizeElementAssets(array $element, array $builder): array
     {
         $path = $element['path'] ?? null;
 
@@ -241,19 +272,40 @@ class BuilderConfig extends ConfigObject
             return $element;
         }
 
-        foreach (['icon', 'iconSmall'] as $key) {
-            if (!isset($element[$key]) || !is_string($element[$key])) {
-                continue;
-            }
-
-            if (preg_match('/^\$\{url:(.+)}$/', $element[$key], $matches)) {
-                $element[$key] = static::toSiteUrl($path . '/' . ltrim($matches[1], '/'));
-            }
-        }
+        $element = static::resolveElementValue($element, $path, $builder);
 
         unset($element['path'], $element['file']);
 
         return $element;
+    }
+
+    protected static function resolveElementValue($value, string $path, array $builder)
+    {
+        if (is_array($value)) {
+            foreach ($value as $key => $item) {
+                $value[$key] = static::resolveElementValue($item, $path, $builder);
+            }
+
+            return $value;
+        }
+
+        if (!is_string($value)) {
+            return $value;
+        }
+
+        if (preg_match('/^\$\{builder\.([^}]+)}$/', $value, $matches)) {
+            return $builder[$matches[1]] ?? $value;
+        }
+
+        if (preg_match('/^\$\{url:(.+)}$/', $value, $matches)) {
+            return static::toSiteUrl($path . '/' . ltrim($matches[1], '/'));
+        }
+
+        return preg_replace_callback(
+            '/\$\{url:([^}]+)}/',
+            static fn($matches) => static::toSiteUrl($path . '/' . ltrim($matches[1], '/')),
+            $value,
+        );
     }
 
     protected static function findElementPath(string $name): ?string
