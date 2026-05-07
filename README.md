@@ -59,3 +59,5 @@ installers/dist/plg_system_yoothemeflexicontent-2.0.5.zip
 ## ดูแลต่อ
 
 ดูรายละเอียด architecture, patch ที่ installer ทำกับ YOOtheme และ troubleshooting ได้ที่ [docs/DEVELOPER_NOTES.md](docs/DEVELOPER_NOTES.md)
+
+ถ้าจะกลับมาพัฒนาต่อหรือส่งต่อให้คนอื่นอ่าน ให้เริ่มจาก [docs/CONTINUATION_GUIDE.md](docs/CONTINUATION_GUIDE.md)
